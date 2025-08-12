@@ -1,46 +1,476 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>장신구 스텟 추천</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>메이지 전용 DPS 계산 & 장신구/무기 추천</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Apple SD Gothic Neo,Malgun Gothic,sans-serif;max-width:980px;margin:24px auto;padding:0 16px;line-height:1.45}
+  h1{font-size:22px;margin:0 0 12px}
+  h2{font-size:18px;margin:24px 0 8px}
+  fieldset{border:1px solid #ddd;border-radius:12px;padding:16px;margin:16px 0}
+  legend{padding:0 6px;color:#444}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .col{flex:1 1 200px;min-width:200px}
+  label{display:block;margin:8px 0 4px;color:#333}
+  input[type="number"],select{width:100%;padding:8px;border:1px solid #ccc;border-radius:8px}
+  .note{font-size:12px;color:#666}
+  .btn{background:#111;color:#fff;border:0;border-radius:10px;padding:10px 14px;cursor:pointer}
+  .btn:disabled{opacity:.6;cursor:not-allowed}
+  .muted{color:#666}
+  .table{width:100%;border-collapse:collapse;margin:12px 0}
+  .table th,.table td{border-bottom:1px solid #eee;padding:8px;text-align:right}
+  .table th:first-child,.table td:first-child{text-align:left}
+  .pill{display:inline-block;background:#f2f2f2;border-radius:999px;padding:3px 10px;margin:2px 6px 2px 0;font-size:12px}
+  .ok{color:#0a7a29}
+  .warn{color:#b75a00}
+  .tip{background:#f7fbff;border:1px solid #e5f0ff;padding:10px;border-radius:10px}
+</style>
 </head>
 <body>
-  <h1>장신구 스텟 추천</h1>
-  
-  <label>레벨: 
-    <input type="number" id="level" min="1" max="100" value="50">
-  </label><br/><br/>
-  
-  <label>직업: 
-    <select id="job">
-      <option value="warrior">전사</option>
-      <option value="mage">마법사</option>
-      <option value="archer">궁수</option>
-    </select>
-  </label><br/><br/>
-  
-  <button onclick="recommend()">추천 받기</button>
-  
-  <h2>추천 결과</h2>
-  <div id="result"></div>
-  
-  <script>
-    function recommend() {
-      const level = Number(document.getElementById('level').value);
-      const job = document.getElementById('job').value;
-      let stat = '';
-      
-      if (job === 'warrior') {
-        stat = '힘 + 민첩 + 체력';
-      } else if (job === 'mage') {
-        stat = '지능 + 마나 회복 + 치명타';
-      } else if (job === 'archer') {
-        stat = '민첩 + 치명타 + 공격속도';
-      }
-      
-      document.getElementById('result').innerText = 
-        `${level}레벨 ${job} 추천 장신구 스탯: ${stat}`;
-    }
-  </script>
+<h1>메이지 전용 DPS 계산 & 장신구/무기 추천</h1>
+<p class="muted">입력 후 아래 <b>계산하기</b> 버튼을 누르면, 총 배율·DPS·추천 무기가 표시됩니다.</p>
+
+<form id="form">
+  <fieldset>
+    <legend>1) 기본 정보 & 장신구 스탯 투자</legend>
+    <div class="row">
+      <div class="col">
+        <label>내 레벨</label>
+        <input type="number" id="level" value="80" min="1" max="200"/>
+        <div class="note">레벨은 표시용이며 현재 계산엔 직접 반영하지 않음</div>
+      </div>
+      <div class="col">
+        <label>레이드 여부</label>
+        <select id="raid">
+          <option value="yes" selected>레이드 (추가 대미지 +25%)</option>
+          <option value="no">일반</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <label>장신구 스탯 - 데미지 포인트</label>
+        <input type="number" id="accDmg" value="0" min="0"/>
+        <div class="note">길드 버프 +5가 자동 추가됩니다</div>
+      </div>
+      <div class="col">
+        <label>장신구 스탯 - 이동속도 포인트</label>
+        <input type="number" id="accSpd" value="0" min="0"/>
+        <div class="note">1pt = 이동속도 +3.5%</div>
+      </div>
+      <div class="col">
+        <label>장신구 스탯 - 최대 체력 포인트</label>
+        <input type="number" id="accHp" value="0" min="0"/>
+        <div class="note">1pt = +25 HP &amp; 데미지 +0.4% <br>길드 버프 +5가 자동 추가됩니다</div>
+      </div>
+    </div>
+    <div class="tip">길드 버프: <span class="pill">데미지 +5pt</span><span class="pill">체력 +5pt</span> (자동 반영)</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>3) 디바인 샤드</legend>
+    <div class="row">
+      <div class="col">
+        <label>디바인 샤드 레벨 (0~8)</label>
+        <input type="number" id="divineLevel" value="5" min="0" max="8"/>
+        <div class="note">예: LV.5이면 총 50pt 보유 (참고값)</div>
+      </div>
+      <div class="col">
+        <label>디바인 최종 데미지 스탯 레벨 (0~8)</label>
+        <input type="number" id="divineFD" value="5" min="0" max="8"/>
+        <div class="note">최종 데미지 스탯은 레벨당 +1% (LV.8까지 총 45pt 필요)</div>
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>4) 직업 (메이지 고정) & 기본 스킬</legend>
+    <div>평타 DPS: <b>373</b> (1초당 1타)</div>
+    <div class="row">
+      <div class="col">
+        <label>직업무기 A (쿨 14s, 2636)</label>
+        <select id="classA">
+          <option value="on" selected>사용</option>
+          <option value="off">미사용</option>
+        </select>
+      </div>
+      <div class="col">
+        <label>직업무기 B (쿨 18s, 5712)</label>
+        <select id="classB">
+          <option value="on" selected>사용</option>
+          <option value="off">미사용</option>
+        </select>
+      </div>
+    </div>
+    <div class="note">“클래스”가 붙은 잠재는 모두 직업무기 판정으로 간주</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>5) 운명무기 (다중 보유 가능 → 가장 높은 조합 추천)</legend>
+    <div class="row">
+      <div class="col">
+        <label><input type="checkbox" class="fate" value="olympus" checked/> 올림푸스</label>
+        <div class="note">A: 1945×2 / 19s, B: 5538 / 42s</div>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="fate" value="valhalla" /> 발할라</label>
+        <div class="note">A: 1433×2 / 14s, B: 2450×2 / 35s</div>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" disabled/> 골드문 (힐템이라 제외)</label>
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>7) 특수무기 (필멸/전설) - 보유한 것 선택</legend>
+    <h3 class="muted" style="margin:8px 0 0">필멸</h3>
+    <div class="row">
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="플레탄12"/> 플레탄 +12 (7001 / 32s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="플레탄13"/> 플레탄 +13 (7809 / 29s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="플레탄14"/> 플레탄 +14 (9424 / 29s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="플레탄15"/> 플레탄 +15 (11848 / 29s)</label>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="아케론12"/> 아케론 +12 (1076×7 / 22s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="아케론13"/> 아케론 +13 (1200×7 / 22s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="아케론14"/> 아케론 +14 (1510×7 / 22s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="아케론15"/> 아케론 +15 (1897×7 / 22s)</label>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="플레게톤12"/> 플레게톤 +12 (538×20 / 37s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="플레게톤13"/> 플레게톤 +13 (600×20 / 37s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="플레게톤14"/> 플레게톤 +14 (755×20 / 37s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="플레게톤15"/> 플레게톤 +15 (949×20 / 37s)</label>
+      </div>
+    </div>
+
+    <h3 class="muted" style="margin:16px 0 0">전설</h3>
+    <div class="row">
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="스톰레온12"/> 스톰레온 +12 (5891 / 22s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="스톰레온13"/> 스톰레온 +13 (6571 / 22s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="스톰레온14"/> 스톰레온 +14 (8236 / 22s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="스톰레온15"/> 스톰레온 +15 (10353 / 22s)</label>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="아르테온12"/> 아르테온 +12 (2493×3 / 26s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="아르테온13"/> 아르테온 +13 (2785×3 / 26s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="아르테온14"/> 아르테온 +14 (3500×3 / 26s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="아르테온15"/> 아르테온 +15 (4401×3 / 26s)</label>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="카이엔12"/> 카이엔 +12 (655×16 / 36s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="카이엔13"/> 카이엔 +13 (731×16 / 36s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="카이엔14"/> 카이엔 +14 (919×16 / 36s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="카이엔15"/> 카이엔 +15 (1155×16 / 36s)</label>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="하켄12"/> 하켄 +12 (7014 / 22s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="하켄13"/> 하켄 +13 (7823 / 22s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="하켄14"/> 하켄 +14 (9804 / 22s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="하켄15"/> 하켄 +15 (12326 / 22s)</label>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="이그니스12"/> 이그니스 +12 (780×9 / 22s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="이그니스13"/> 이그니스 +13 (869×9 / 22s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="이그니스14"/> 이그니스 +14 (1093×9 / 22s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="이그니스15"/> 이그니스 +15 (1374×9 / 22s)</label>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="드래고니아12"/> 드래고니아 +12 (9089 / 30s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="드래고니아13"/> 드래고니아 +13 (10138 / 30s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="드래고니아14"/> 드래고니아 +14 (12745 / 30s)</label>
+      </div>
+      <div class="col">
+        <label><input type="checkbox" class="spec" value="드래고니아15"/> 드래고니아 +15 (16023 / 30s)</label>
+      </div>
+    </div>
+  </fieldset>
+
+  <button type="button" class="btn" id="calcBtn">계산하기</button>
+</form>
+
+<div id="out"></div>
+
+<script>
+/** ---------- 고정 데이터 ---------- **/
+const BASE_AUTO_DPS = 373; // 메이지 평타
+const RAID_BONUS = 0.25;   // 레이드 추가 대미지
+// 직업무기
+const classSkills = {
+  A: { dmg: 2636, cd: 14 },
+  B: { dmg: 5712, cd: 18 }
+};
+// 운명무기
+const fateWeapons = {
+  olympus: { A:{dmg:1945*2, cd:19}, B:{dmg:5538, cd:42}, name:"올림푸스" },
+  valhalla: { A:{dmg:1433*2, cd:14}, B:{dmg:2450*2, cd:35}, name:"발할라" }
+};
+// 특수무기
+const specWeapons = {
+  // 필멸
+  "플레탄12": { dmg:7001, cd:32, name:"플레탄 +12" },
+  "플레탄13": { dmg:7809, cd:29, name:"플레탄 +13" },
+  "플레탄14": { dmg:9424, cd:29, name:"플레탄 +14" },
+  "플레탄15": { dmg:11848, cd:29, name:"플레탄 +15" },
+  "아케론12": { dmg:1076*7, cd:22, name:"아케론 +12" },
+  "아케론13": { dmg:1200*7, cd:22, name:"아케론 +13" },
+  "아케론14": { dmg:1510*7, cd:22, name:"아케론 +14" },
+  "아케론15": { dmg:1897*7, cd:22, name:"아케론 +15" },
+  "플레게톤12": { dmg:538*20, cd:37, name:"플레게톤 +12" },
+  "플레게톤13": { dmg:600*20, cd:37, name:"플레게톤 +13" },
+  "플레게톤14": { dmg:755*20, cd:37, name:"플레게톤 +14" },
+  "플레게톤15": { dmg:949*20, cd:37, name:"플레게톤 +15" },
+  // 전설
+  "스톰레온12": { dmg:5891, cd:22, name:"스톰레온 +12" },
+  "스톰레온13": { dmg:6571, cd:22, name:"스톰레온 +13" },
+  "스톰레온14": { dmg:8236, cd:22, name:"스톰레온 +14" },
+  "스톰레온15": { dmg:10353, cd:22, name:"스톰레온 +15" },
+  "아르테온12": { dmg:2493*3, cd:26, name:"아르테온 +12" },
+  "아르테온13": { dmg:2785*3, cd:26, name:"아르테온 +13" },
+  "아르테온14": { dmg:3500*3, cd:26, name:"아르테온 +14" },
+  "아르테온15": { dmg:4401*3, cd:26, name:"아르테온 +15" },
+  "카이엔12": { dmg:655*16, cd:36, name:"카이엔 +12" },
+  "카이엔13": { dmg:731*16, cd:36, name:"카이엔 +13" },
+  "카이엔14": { dmg:919*16, cd:36, name:"카이엔 +14" },
+  "카이엔15": { dmg:1155*16, cd:36, name:"카이엔 +15" },
+  "하켄12": { dmg:7014, cd:22, name:"하켄 +12" },
+  "하켄13": { dmg:7823, cd:22, name:"하켄 +13" },
+  "하켄14": { dmg:9804, cd:22, name:"하켄 +14" },
+  "하켄15": { dmg:12326, cd:22, name:"하켄 +15" },
+  "이그니스12": { dmg:780*9, cd:22, name:"이그니스 +12" },
+  "이그니스13": { dmg:869*9, cd:22, name:"이그니스 +13" },
+  "이그니스14": { dmg:1093*9, cd:22, name:"이그니스 +14" },
+  "이그니스15": { dmg:1374*9, cd:22, name:"이그니스 +15" },
+  "드래고니아12": { dmg:9089, cd:30, name:"드래고니아 +12" },
+  "드래고니아13": { dmg:10138, cd:30, name:"드래고니아 +13" },
+  "드래고니아14": { dmg:12745, cd:30, name:"드래고니아 +14" },
+  "드래고니아15": { dmg:16023, cd:30, name:"드래고니아 +15" }
+};
+
+// 유틸
+const pct = (x)=> (x*100).toFixed(2)+"%";
+const f2 = (x)=> x.toFixed(2);
+
+/** ---------- 핵심 계산 ---------- **/
+function calc(){
+  // 입력
+  const raid = document.getElementById('raid').value === 'yes';
+  const accDmg = Number(document.getElementById('accDmg').value);
+  const accSpd = Number(document.getElementById('accSpd').value);
+  const accHp  = Number(document.getElementById('accHp').value);
+  const divineLevel = Number(document.getElementById('divineLevel').value);
+  const divineFD = Number(document.getElementById('divineFD').value);
+  const useClassA = document.getElementById('classA').value === 'on';
+  const useClassB = document.getElementById('classB').value === 'on';
+
+  // 길드 버프 적용 (데미지/체력 각 +5pt)
+  const accDmgTotalPt = accDmg + 5;
+  const accHpTotalPt = accHp + 5;
+  const accSpdTotalPt = accSpd;
+
+  // 일반 스탯 배율
+  const dmgFromDmg = accDmgTotalPt * 0.0065; // +0.65%/pt
+  const dmgFromHp  = accHpTotalPt  * 0.0040; // +0.4%/pt
+  const msFromSpd  = accSpdTotalPt * 3.5;    // +3.5%/pt (표시용)
+  const hpFlat     = accHpTotalPt  * 25;     // +25 HP/pt (표시용)
+
+  // 디바인 최종 데미지 (LV당 +1%)
+  const divineFDmul = Math.max(0, Math.min(8, divineFD)) * 0.01;
+
+  // 레이드 배율
+  const raidMul = raid ? (1 + RAID_BONUS) : 1;
+
+  // 총 데미지 배율 (곱연산 기준: 레이드 배율 × (1 + 합산증가))
+  const totalInc = dmgFromDmg + dmgFromHp + divineFDmul;
+  const totalMul = raidMul * (1 + totalInc);
+
+  // 기본 DPS = 평타 + 선택 스킬들의 평균DPS 합
+  let baseDps = BASE_AUTO_DPS * totalMul;
+
+  let detailRows = [];
+  // 직업무기
+  if(useClassA){
+    const dpsA = (classSkills.A.dmg / classSkills.A.cd) * totalMul;
+    detailRows.push(["직업무기 A", classSkills.A.dmg, classSkills.A.cd, f2(dpsA)]);
+    baseDps += dpsA;
+  }
+  if(useClassB){
+    const dpsB = (classSkills.B.dmg / classSkills.B.cd) * totalMul;
+    detailRows.push(["직업무기 B", classSkills.B.dmg, classSkills.B.cd, f2(dpsB)]);
+    baseDps += dpsB;
+  }
+
+  // 운명무기 (보유 선택들을 모두 더해 사용 가능하다고 가정)
+  const ownedFate = [...document.querySelectorAll('.fate:checked')].map(x=>x.value);
+  let fateSum = 0;
+  ownedFate.forEach(key=>{
+    const fw = fateWeapons[key];
+    const dpsA = (fw.A.dmg/fw.A.cd)*totalMul;
+    const dpsB = (fw.B.dmg/fw.B.cd)*totalMul;
+    fateSum += dpsA + dpsB;
+    detailRows.push([fw.name+" A", fw.A.dmg, fw.A.cd, f2(dpsA)]);
+    detailRows.push([fw.name+" B", fw.B.dmg, fw.B.cd, f2(dpsB)]);
+  });
+  baseDps += fateSum;
+
+  // 특수무기 (다중 선택 → 모두 합산)
+  const ownedSpec = [...document.querySelectorAll('.spec:checked')].map(x=>x.value);
+  let specDpsList = [];
+  let specSum = 0;
+  ownedSpec.forEach(key=>{
+    const w = specWeapons[key];
+    const dps = (w.dmg / w.cd) * totalMul;
+    specDpsList.push({key, name:w.name, dps});
+    specSum += dps;
+    detailRows.push([w.name, w.dmg, w.cd, f2(dps)]);
+  });
+  baseDps += specSum;
+
+  // 정렬: 기여도 큰 스킬/무기 위로
+  detailRows.sort((a,b)=> Number(b[3]) - Number(a[3]) );
+
+  // 추천 로직 (간단)
+  // - 무기 추천: 평균 DPS 상위 3개
+  const topWeapons = specDpsList.sort((a,b)=>b.dps-a.dps).slice(0,3);
+  // - 스탯 추천 사유: 현재 투자비율에 따라 제안
+  let statReason = "";
+  const share = {
+    dmg: accDmgTotalPt,
+    hp: accHpTotalPt,
+    spd: accSpdTotalPt
+  };
+  // 데미지 기대증가(장신구부) = 0.65%*dmg + 0.4%*hp
+  const dmgGainFrom1Dmg = 0.0065;
+  const dmgGainFrom1Hp  = 0.0040;
+  if (dmgGainFrom1Dmg > dmgGainFrom1Hp){
+    statReason = "장신구 포인트는 '데미지'에 투자할수록 기대 DPS 상승폭이 큽니다. (1pt 당 +0.65% > 체력의 +0.4%)";
+  } else {
+    statReason = "장신구 포인트는 '체력'에 투자해도 DPS 상승이 있지만, '데미지'가 더 유리합니다.";
+  }
+  // 레이드 여부 사유
+  const raidReason = (raid ? "레이드 배율(+25%)이 적용되어 쿨이 짧을수록 기대 DPS가 잘 나옵니다." : "일반 전투에서는 배율 이득이 없어도, 여전히 짧은 쿨 무기가 유리합니다.");
+
+  // 운명무기 추천: 보유 중이면 평균DPS 비교
+  let fateRec = "";
+  if (ownedFate.length){
+    let fateScores = ownedFate.map(k=>{
+      const fw = fateWeapons[k];
+      return {
+        name: fateWeapons[k].name,
+        dps: (fw.A.dmg/fw.A.cd + fw.B.dmg/fw.B.cd) * totalMul
+      };
+    }).sort((a,b)=>b.dps-a.dps);
+    fateRec = `운명무기: '${fateScores[0].name}'가 평균 DPS가 가장 높습니다.`;
+  } else {
+    fateRec = "운명무기를 보유 체크하면 함께 평균DPS에 합산되어 추천이 더 정확해집니다.";
+  }
+
+  // 출력
+  const out = document.getElementById('out');
+  out.innerHTML = `
+    <h2>결과 요약</h2>
+    <div>
+      <span class="pill">총 데미지 배율: <b>${pct(totalMul-1)}</b></span>
+      <span class="pill">이동속도: <b>${pct(msFromSpd/100)}</b></span>
+      <span class="pill">최대 체력 추가: <b>${hpFlat}</b></span>
+      <span class="pill">디바인 최종 데미지: <b>${pct(divineFDmul)}</b></span>
+    </div>
+
+    <h2>평균 DPS</h2>
+    <div class="pill">평타 포함 총합 DPS: <b>${f2(baseDps)}</b></div>
+
+    <table class="table">
+      <thead><tr><th>스킬/무기</th><th>표기 대미지</th><th>쿨타임(s)</th><th>평균 DPS(배율 반영)</th></tr></thead>
+      <tbody>
+        ${detailRows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join("")}
+      </tbody>
+    </table>
+
+    <h2>추천</h2>
+    <ul>
+      <li><b>특수무기 Top 3</b>: ${
+        topWeapons.length ? topWeapons.map(w=>`${w.name} (${f2(w.dps)} DPS)`).join(", ") : "선택된 특수무기 없음"
+      }</li>
+      <li>${fateRec}</li>
+      <li>${statReason}</li>
+      <li>${raidReason}</li>
+    </ul>
+
+    <div class="note">※ 마나/쿨감 등의 추가 시스템은 미적용. 필요하면 추가해 줄 수 있어요.</div>
+  `;
+}
+
+document.getElementById('calcBtn').addEventListener('click', calc);
+</script>
 </body>
 </html>
